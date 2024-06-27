@@ -5,10 +5,10 @@
 class Example : CConfigPlus
 {
 public:
-    Example() 
+    Example(const char* path = "example.toml")
     {
-        std::cout << "reading: " << "example.toml" << std::endl;
-        std::map<std::string, std::string> config = ReadFromFile(ConfigFormat::Toml, "example.toml");
+        std::cout << "reading: " << path << std::endl;
+        std::map<std::string, std::string> config = ReadFromFile(ConfigFormat::Toml, path);
         if (config.empty())
         {
             std::cout << "failed to read config" << std::endl;
@@ -28,10 +28,8 @@ public:
 
 int main()
 {
-    Example example;
-    if (example.m_bool)
-    {
-        return 2;
-    }
+    Example example = Example("example.toml");
+    std::cout << "m_bool: " << example.m_bool << std::endl;
+    std::cout << "m_int: " << example.m_int << std::endl;
     return 1;
 }
