@@ -1,151 +1,49 @@
 #pragma once
 
-#include <cstddef>
-#include <cstring>
-#include <map>
 #include <string>
-#include <fstream>
-#include <iostream>
-#include <any>
+#include <vector>
+#include <type_traits>
 
-#define CFG_ADD_BOOL(Name, DefaultValue) \
-public: bool Name; \
-private: Vars_t<bool, sizeof(#Name)> \
-    m_Var##Name { TypeInfo::TypeBool, DefaultValue, &Name, #Name, m_Vars }; \
-public:
-
-#define CFG_ADD_INT(Name, DefaultValue) \
-public: int Name; \
-private: Vars_t<int, sizeof(#Name)> \
-    m_Var##Name { TypeInfo::TypeInt, DefaultValue, &Name, #Name, m_Vars }; \
-public:
-
-class CConfigPlus
+class IConfigClass
 {
 protected:
-    enum class ConfigFormat : int
-    {
-        Json = 0,
-        Toml,
-        Yaml,
-        Xml,
-        End
-    };
-    void SaveToFile(ConfigFormat FormatType, const char* FileName);
-    void LoadFromFile(ConfigFormat FormatType, const char* FileName)
-    {
-        std::map<std::string, std::string> Map = ReadFromFile(FormatType, FileName);
+    std::vector<size_t> m_VariableOffsets;
+};
 
+// make sure a typename is derived from IConfigClass or
+// can be converted to string
+template <typename T>
+using IsDerivedOrConvertibleToString = std::disjunction<std::is_base_of<IConfigClass, T>, std::is_convertible<T, std::string>>;
 
-    }
-    std::map<std::string, std::string> ReadFromFile(ConfigFormat format, const char* FileName)
-    {
-        if (format == ConfigFormat::Toml)
-            return ReadToml(FileName);
-        return {};
-    }
+// check template type inherits from IConfigClass or 
+// is a type which can be converted to string (like
+// int, float, double, etc.) also make sure the Variable
+// is in a class that inherits from IConfigClass
+template <typename T, typename = std::enable_if<std::is_convertible<T, std::string>::value>>
+struct ConfigVariable
+{
+    std::string name;
+    T value;
+    ConfigVariable(std::string name, T value = T{}) : name(name), value(value) {}
 
-protected:
-    enum class TypeInfo : int
-    {
-        TypeBool = 0,
-        TypeInt,
-        TypeFloat,
-        TypeString,
-        TypeColor,
-        TypeVector,
-        TypeArray,
-        TypeEnd
-    };
+    operator T() const { return value; }
+    const T& operator=(const T& rhs) { return value = rhs; }
+};
 
-protected:
-    template <typename T, std::size_t SizeName>
-    struct Vars_t
-    {
-        TypeInfo Type;
-        T DefaultValue;
-        T* pValue;
-        char Name[SizeName];
+class TheOtherClass : public IConfigClass
+{
+public:
+    ConfigVariable<int> myInt{ "TheInt2" };
+    ConfigVariable<float> myFloat{ "TheFloat2" };
+};
 
-        [[nodiscard]] constexpr std::size_t GetSizeName() const
-        {
-            return SizeName;
-        }
+// Example usage
+class Config : public IConfigClass
+{
+public:
+    ConfigVariable<int> myInt{ "TheInt" };
+    ConfigVariable<float> myFloat{ "TheFloat" };
 
-        [[nodiscard]] virtual const char* GetName() const
-        {
-            return Name;
-        }
-
-        [[nodiscard]] T* GetValue() const
-        {
-            return pValue;
-        }
-
-        [[nodiscard]] T GetDefaultValue() const
-        {
-            return DefaultValue;
-        }
-
-        [[nodiscard]] TypeInfo GetType() const
-        {
-            return Type;
-        }
-
-        Vars_t(TypeInfo Type, T DefaultValue, T* pValue, const char* Name, std::map<std::string, void*>& Vars)
-            : Type(Type), DefaultValue(DefaultValue), pValue(pValue)
-        {
-            std::strncpy(this->Name, Name, SizeName);
-            Vars[Name] = this;
-        }
-    };
-
-private:
-    // this is not a toml parsing library so...
-    std::map<std::string, std::string> ReadToml(const char* FileName)
-    {
-        std::map<std::string, std::string> Map;
-        std::ifstream File(FileName);
-        if (!File.is_open())
-            return Map;
-
-        std::string Line;
-        while (std::getline(File, Line))
-        {
-            if (Line.empty())
-                continue;
-
-            if (Line[0] == '#')
-                continue;
-
-            std::size_t Pos = Line.find('=');
-            if (Pos == std::string::npos)
-                continue;
-
-            std::string Key = Line.substr(0, Pos);
-            std::string Value = Line.substr(Pos + 1);
-            std::size_t Comment = Value.find('#');
-            if (Comment != std::string::npos)
-                Value = Value.substr(0, Comment);
-
-            // string whitespace
-            Key.erase(0, Key.find_first_not_of(" \t"));
-            Key.erase(Key.find_last_not_of(" \t") + 1);
-
-            Value.erase(0, Value.find_first_not_of(" \t"));
-            Value.erase(Value.find_last_not_of(" \t") + 1);
-
-            Map[Key] = Value;
-
-            Vars_t<std::any, 1>* m_Var = static_cast<Vars_t<std::any, 1>*>(m_Vars[Key]);
-            if (m_Var)
-                std::cout << m_Var->GetName() << " = " << std::any_cast<std::string>(m_Var->GetValue()) << std::endl;
-        }
-
-        return Map;
-    }
-
-protected:
-    std::map<std::string, void*> m_Vars;
+    ConfigVariable<TheOtherClass> otherClass{ "TheOtherClass" };
 };
 
